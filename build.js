@@ -36,12 +36,18 @@ function build(config, opts, callback){
     
     // Add Architect
     var archName = path.resolve(__dirname + "/../architect/architect.js");
-    mains.push(archName);
-    (opts.ignore || (opts.ignore = [])).push(
-        //path.resolve(__dirname + "/../architect/events"),
-        path.resolve(__dirname + "/../architect/path"),
-        path.resolve(__dirname + "/../architect/fs")
-    );
+    if (!opts.noArchitect) {
+        mains.push(archName);
+        (opts.ignore || (opts.ignore = [])).push(
+            //path.resolve(__dirname + "/../architect/events"),
+            path.resolve(__dirname + "/../architect/path"),
+            path.resolve(__dirname + "/../architect/fs")
+        );
+    }
+    
+    // Add RequireJS
+    if (opts.withRequire)
+        mains.unshift(path.resolve(__dirname + "/build_support/mini_require.js"));
     
     // Find their deps
     var stream = mdeps(mains, opts);
@@ -53,51 +59,72 @@ function build(config, opts, callback){
     stream.on("end", function(){
         var lutNonJs = {};
         
+        // Filter sources
+        (opts.filter || []).forEach(function(filter){
+            sources = sources.filter(function(pkg){
+                return pkg.id.indexOf(filter) !== 0;
+            });
+        });
+        
+        // Add additional packages
+        (opts.packages || []).forEach(function(main){
+            sources.unshift({
+                id     : main,
+                file   : main,
+                source : fs.readFileSync(path.resolve(__dirname + "/" 
+                    + main.replace(/\.js$/, "") + ".js"), "utf8") // @todo make this async
+            });
+        });
+        
         // Rewrite all the defines to include the id as first arg
         rewriteDefines(sources, archName, lutNonJs);
         
         // Include the architect config at the end in the same way as the tests
-        var source;
-        if (opts.includeConfig) {
-            source = opts.configFile
-                + 'require(["architect"], function (architect) {'
-                + '    architect.resolveConfig(require.plugins, function (err, config) {'
-                + '        if (err) throw err;'
-                + '        architect.createApp(config);'
-                + '    });'
-                + '});';
-        }
-        else {
-            source = 'require(["architect", "./architect-config"], function (architect, plugins) {'
-                + '    architect.resolveConfig(plugins, function (err, config) {'
-                + '        if (err) throw err;'
-                + '        architect.createApp(config);'
-                + '    });'
-                + '});';
+        if (!opts.noArchitect) {
+            var source;
+            if (opts.includeConfig) {
+                source = opts.configFile
+                    + 'require(["architect"], function (architect) {'
+                    + '    architect.resolveConfig(require.plugins, function (err, config) {'
+                    + '        if (err) throw err;'
+                    + '        architect.createApp(config);'
+                    + '    });'
+                    + '});';
+            }
+            else {
+                source = 'require(["architect", "./architect-config"], function (architect, plugins) {'
+                    + '    architect.resolveConfig(plugins, function (err, config) {'
+                    + '        if (err) throw err;'
+                    + '        architect.createApp(config);'
+                    + '    });'
+                    + '});';
+                
+                var output = (opts.outputFolder || ".") + "/" + (opts.outputFile || "architect-config.js");
+                fs.writeFile(output, opts.configFile, function(err){
+                    if (!err)
+                        console.log("Written config file in '" + output + "'.");
+                });
+            }
             
-            var path = (opts.outputFolder || ".") + "/" + (opts.outputFile || "architect-config.js");
-            fs.writeFile(path, opts.configFile, function(err){
-                if (!err)
-                    console.log("Written config file in '" + path + "'.");
+            sources.push({
+                id     : "bootstrap",
+                file   : "bootstrap",
+                source : source
             });
         }
         
-        sources.push({
-            id     : "bootstrap",
-            file   : "bootstrap",
-            source : source
-        });
-        
         console.log("Procesing " + sources.length + " files.");
         
-        sources.unshift({
-            id     : "require",
-            file   : "require.js",
-            source : '(function(){function o(e){var i=function(e,t){return r("",e,t)},s=t;e&&(t[e]||(t[e]={}),s=t[e]);if(!s.define||!s.define.packaged)n.original=s.define,s.define=n,s.define.packaged=!0;if(!s.require||!s.require.packaged)r.original=s.require,s.require=i,s.require.packaged=!0}var e="",t=function(){return this}();if(!e&&typeof requirejs!="undefined")return;var n=function(e,t,r){if(typeof e!="string"){n.original?n.original.apply(window,arguments):(console.error("dropping module because define wasn\'t a string."),console.trace());return}arguments.length==2&&(r=t),n.modules||(n.modules={}),n.modules[e]=r},r=function(e,t,n){if(Object.prototype.toString.call(t)==="[object Array]"){var i=[];for(var o=0,u=t.length;o<u;++o){var a=s(e,t[o]);if(!a&&r.original)return r.original.apply(window,arguments);i.push(a)}n&&n.apply(null,i)}else{if(typeof t=="string"){var f=s(e,t);return!f&&r.original?r.original.apply(window,arguments):(n&&n(),f)}if(r.original)return r.original.apply(window,arguments)}},i=function(e,t){if(t.indexOf("!")!==-1){var n=t.split("!");return i(e,n[0])+"!"+i(e,n[1])}if(t.charAt(0)=="."){var r=e.split("/").slice(0,-1).join("/");t=r+"/"+t;while(t.indexOf(".")!==-1&&s!=t){var s=t;t=t.replace(/\\/\\.\\//,"/").replace(/[^\\/]+\\/\\.\\.\\//,"")}}return t},s=function(e,t){t=i(e,t);var s=n.modules[t];if(!s)return null;if(typeof s=="function"){var o={},u={id:t,uri:"",exports:o,packaged:!0},a=function(e,n){return r(t,e,n)},f=s(a,o,u);return o=f||u.exports,n.modules[t]=o,o}return s};o(e)})()'
-        })
-        
         // Concatenate all files using uglify2 with source maps
-        var result = compact(sources, opts);
+        var result;
+        if (opts.compress)
+            result = compact(sources, opts);
+        else {
+            result = {
+                code : sources.map(function(src){ return src.source; }).join("\n"),
+                map : ""
+            };
+        }
         
         // Wrap the entire thing in a define of it's own
         // @todo it might be better to do the replaces before the map file is created
@@ -106,25 +133,25 @@ function build(config, opts, callback){
         //     + result.code 
         //     + "});";
         code = code
-            .replace(/(["'])require/g, "$1req$1+$1uire")
+            .replace(/(["'])require\(/g, "$1req$1+$1uire(")
             .replace(/REPLACE>([^<]*)<REPLACE/g, function(m, id){
                 return lutNonJs[id];
             })
-            .replace(/\((["'])[^"]*text\!/g, "($1");
+            .replace(/\((["'])[^"]*text\!([^'"]+)/g, "($1$2");
         
         // Write output code
-        path = (opts.outputFolder || ".") + "/" + (opts.outputFile || "build.js");
-        fs.writeFile(path, code, function(err){
+        output = (opts.outputFolder || ".") + "/" + (opts.outputFile || "build.js");
+        fs.writeFile(output, code, function(err){
             if (err) return callback(err);
-            console.log("Written output in '" + path + "'");
+            console.log("Written output in '" + output + "'");
         });
         
         // Write map file
         if (opts.mapFile) {
-            path = (opts.outputFolder || ".") + "/" + opts.mapFile;
-            fs.writeFile(path, result.map, function(err){
+            output = (opts.outputFolder || ".") + "/" + opts.mapFile;
+            fs.writeFile(output, result.map, function(err){
                 if (err) return callback(err);
-                console.log("Written map file in '" + path + "'");
+                console.log("Written map file in '" + output + "'");
             });
         }
         
@@ -154,21 +181,19 @@ function compact(sources, opts){
      */
     toplevel.figure_out_scope();
     
-    if (opts.compress) {
-        var compressor = UglifyJS.Compressor({});
-        var compressed_ast = toplevel.transform(compressor);
-        
-        /**
-         * After compression it is a good idea to call again figure_out_scope 
-         * (since the compressor might drop unused variables / unreachable code and 
-         * this might change the number of identifiers or their position). 
-         * Optionally, you can call a trick that helps after Gzip (counting 
-         * character frequency in non-mangleable words). 
-         */
-        compressed_ast.figure_out_scope();
-        compressed_ast.compute_char_frequency();
-        //compressed_ast.mangle_names({except: ["$", "require", "exports"]});
-    }
+    var compressor = UglifyJS.Compressor({});
+    var compressed_ast = toplevel.transform(compressor);
+    
+    /**
+     * After compression it is a good idea to call again figure_out_scope 
+     * (since the compressor might drop unused variables / unreachable code and 
+     * this might change the number of identifiers or their position). 
+     * Optionally, you can call a trick that helps after Gzip (counting 
+     * character frequency in non-mangleable words). 
+     */
+    compressed_ast.figure_out_scope();
+    compressed_ast.compute_char_frequency();
+    //compressed_ast.mangle_names({except: ["$", "require", "exports"]});
     
     var stream;
     if (opts.mapFile) {
@@ -209,7 +234,7 @@ function rewriteDefines(sources, archName, lut){
             }
             else {
                 pkg.source = pkg.source
-                    .replace(/define\(/, "define(\"" + pkg.id + '", ');
+                    .replace(/define\((\s*[\[f])/, "define(\"" + pkg.id + '", $1');
             }
             pkg.source = pkg.source
                 .replace(/define\(([^,\[\]]+,\s*)?\[([^\]]*)\],([^\)]*)/g, function(m, first, deps, func){
@@ -250,11 +275,45 @@ build(__dirname + "/../../configs/logicblox.js", {
     includeConfig : true,
     compress      : true,
     basepath      : "/home/ubuntu/vfs-server",
-    ignore        : [],
+    filter        : ["ace"],
+    // copy          : [],
+    packages      : ["../ace/build/src/ace"],
     outputFolder  : __dirname + "/build",
     outputFile    : "logicblox.js",
     mapFile       : "logicblox.js.map"
-    //mapRoot       : "http://example.com"
+    // mapRoot       : "http://example.com"
+}, function(err, data){
+    console.error(err.message);
+});
+
+build([
+    "ace/worker/worker",
+    "ace/lib/fixoldbrowsers",
+    
+    "plugins/c9.language/worker",
+    "plugins/c9.language.generic/local_completer",
+    "plugins/c9.language.generic/snippet_completer",
+    "plugins/c9.language.generic/open_files_local_completer",
+    "plugins/c9.language.generic/mode_completer",
+    // "plugins/c9.language.javascript/parse",
+    // "plugins/c9.language.javascript/scope_analyzer",
+    // "plugins/c9.language.javascript/jshint",
+    // "plugins/c9.language.javascript/debugger",
+    // "plugins/c9.language.javascript/outline",
+    // "plugins/c9.language.javascript/jumptodef"
+    "plugins/c9.language.logiql/logiql_handler"
+], {
+    enableBrowser : true,
+    includeConfig : false,
+    noArchitect   : true,
+    compress      : true,
+    packagePaths  : packagePaths,
+    //filter        : ["ace"],
+    basepath      : "/home/ubuntu/vfs-server",
+    outputFolder  : __dirname + "/build",
+    outputFile    : "worker-c9.language.js",
+    mapFile       : "worker-c9.language.js.map"
+    // mapRoot       : "http://example.com"
 }, function(err, data){
     console.error(err.message);
 });
