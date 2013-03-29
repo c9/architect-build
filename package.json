@@ -14,7 +14,16 @@
         "type": "git",
         "url": "http://github.com/c9/architect-build.git"
     },
-    "dependencies": {},
+    "dependencies": {
+        "through": "~2.2.0",
+        "JSONStream": "~0.4.3",
+        "browser-resolve": "~0.0.3",
+        "resolve": "~0.3.0",
+        "detective": "~2.0.0",
+        "concat-stream": "~0.1.1",
+        "module-deps": "~0.5.3",
+        "uglify-js": "~2.2.5"
+    },
     "devDependencies": {},
     "optionalDependencies": {},
     "licenses": [
