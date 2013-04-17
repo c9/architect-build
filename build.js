@@ -134,6 +134,7 @@ function build(config, opts, callback){
         //     + "});";
         code = code
             .replace(/(["'])require\(/g, "$1req$1+$1uire(")
+            .replace(/\bconst /g, "var ")
             .replace(/REPLACE>([^<]*)<REPLACE/g, function(m, id){
                 return lutNonJs[id];
             })
