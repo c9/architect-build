@@ -265,7 +265,10 @@ module.exports = build;
 
 var packagePaths = {
     "ace"        : __dirname + "/../../node_modules/ace/lib/ace",
-    "plugins"    : __dirname + "/../../plugins-client",
+    "repl_ace"       : __dirname + "/../../node_modules/repl_ace",
+    "plugins"    : __dirname + "/../../plugins",
+    "pivot"      : __dirname + "/../../node_modules/pivottable/lib/pivot",
+    "pivotdata"  : __dirname + "/../../node_modules/pivottable/experiments",
     "events"     : __dirname + "/../../jam/events/events.js",
     "treehugger" : __dirname + "/../../node_modules/treehugger/lib/treehugger"
 };
@@ -274,12 +277,12 @@ build(__dirname + "/../../configs/logicblox.js", {
     enableBrowser : true,
     packagePaths  : packagePaths,
     includeConfig : true,
-    compress      : true,
+    compress      : !true,
     basepath      : "/home/ubuntu/vfs-server",
-    filter        : ["ace"],
+    filter        : [],
     // copy          : [],
-    packages      : ["../ace/build/src/ace"],
-    outputFolder  : __dirname + "/build",
+    packages      : ["../ace/build_support/mini_require"],
+    outputFolder  : __dirname + "/build/lb-c9",
     outputFile    : "logicblox.js",
     mapFile       : "logicblox.js.map"
     // mapRoot       : "http://example.com"
