@@ -1,5 +1,5 @@
 {
-    "name": "architect",
+    "name": "architect-build",
     "description": "Concatenates and uglifies an architect config into one file with source map and incremental update support",
     "version": "0.1.0",
     "author": "Ajax.org B.V. <info@ajax.org>",
@@ -15,17 +15,14 @@
         "url": "http://github.com/c9/architect-build.git"
     },
     "dependencies": {
-        "through": "~2.2.0",
-        "JSONStream": "~0.4.3",
-        "browser-resolve": "~0.0.3",
-        "resolve": "~0.3.0",
-        "detective": "~2.0.0",
-        "concat-stream": "~0.1.1",
-        "module-deps": "~0.5.3",
-        "uglify-js": "~2.2.5"
+        "through": "2.2.0",
+        "async": "",
+        "mkdirp": ""
     },
     "devDependencies": {},
-    "optionalDependencies": {},
+    "optionalDependencies": {
+        "uglify-js": "2.4.14"
+    },
     "licenses": [
         {
             "type": "MIT",
