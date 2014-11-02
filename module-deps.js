@@ -351,10 +351,14 @@ function removeLicenceCommentsKeepLines(module) {
 function wrapUMD(module) {
     if (module.loaderModule || module.noRequire)
         return;
-    if (/define\(function\s*\(/.test(module.source))
-        return;
-    if (/define\(\[[^\]]*\],\s*function\(/.test(module.source))
-        return;
+    var firstDefineCall = module.source.match(/define\([^)]*/);
+    if (firstDefineCall) {
+        // check if it is a normal define or some crazy umd trick
+        if (/define\(function\s*\(/.test(firstDefineCall[0]))
+            return;
+        if (/define\(\[[^\]]*\],\s*function\(/.test(firstDefineCall[0]))
+            return;
+    }
     console.log("wrapping module " + module.id);
 
     
@@ -392,3 +396,6 @@ function quote(str) {
         + str.replace(/[\\']/g, "\\$&").replace(/\n/g, "\\n")
         + "'";
 }
+
+
+module.exports.resolveModulePath = resolveModulePath;

@@ -47,6 +47,7 @@ var patchTemplate = ";(" +function() {
 var Module = require("module");
 var path = require("path");
 var fs = require("fs");
+var convertPath = require("./copy").convertPath;
 var loaded, moduleMap, root;
 var ignore;
 
@@ -142,7 +143,7 @@ function build(base, args, cb) {
             plugin.packagePath_orig = plugin.packagePath;
         });
     };
-    server(args, "local", function(err, config) {
+    server(args, null, function(err, config) {
         addModule("server.js");
         config.forEach(function(plugin) {
             if (plugin.packagePath)
@@ -181,8 +182,8 @@ dest = "/build/webkitbuilds/app.nw"
 var args = ["local","-s", "local"];
 */
 module.exports = function(options, cb) {
-    var dest = options.dest;
-    var root = options.root;
+    var dest = convertPath(options.dest);
+    var root = convertPath(options.root);
     var args = options.args;
     ignore = options.ignore && function(id) {
         return options.ignore.test(id);

@@ -1,23 +1,19 @@
 var UglifyJS = require("uglify-js");
 
 
-function compress(sources, opts){
-    if (typeof sources == "string") {
-        sources = [{source: sources, file: ""}];
-    }
-    
+function compress(sources, opts) {
     if (!opts)
         opts = {};
+    if (typeof sources == "string")
+        sources = [{source: sources, file: ""}];
     
     var toplevel = null;
-    if (!sources.length) {
-        return {
-            code : "",
-            map  : null
-        };
-    }
+    var literals = [];
     
     sources.forEach(function(pkg){
+        if (/^"disable compress"/.test(pkg.source))
+            return literals.push(pkg.source);
+        
         if (pkg.file) console.log("Adding '" + pkg.file + "'.");
         
         toplevel = UglifyJS.parse(pkg.source, {
@@ -25,6 +21,10 @@ function compress(sources, opts){
             toplevel: toplevel
         });
     });
+    
+    if (!toplevel) {
+        return { code: literals.join("\n"), map: null };
+    }
     
     /**
      * UglifyJS contains a scope analyzer that you need to call manually before 
@@ -39,7 +39,8 @@ function compress(sources, opts){
     
     var compressor = UglifyJS.Compressor({
         evaluate: false,
-        warnings: !!opts.verbose
+        warnings: !!opts.verbose,
+        unsafe: false
     });
     var compressed_ast = toplevel.transform(compressor);
     
@@ -64,7 +65,6 @@ function compress(sources, opts){
         ascii_only    : false, // output ASCII-safe? (encodes Unicode characters as ASCII)
         inline_script : false, // escape "</script"?
         max_line_len  : 100,   // maximum line length (for non-beautified output)
-        ie_proof      : false, // output IE-safe code?
         beautify      : false, // beautify output?
         bracketize    : false, // use brackets every time?
         comments      : false, // output comments?
@@ -95,9 +95,29 @@ function compress(sources, opts){
     }
     
     return {
-        code : asciify(stream.toString()),
+        code : asciify(stream.toString()) + "\n" + literals.join("\n"),
         map  : source_map ? source_map.toString() : null // json output for your source map
     };
 }
 
+compress.withCache = function(sources, opts) {
+    var cache = opts.cache;
+    if (cache && !cache.compress)
+        cache.compress = Object.create(null);
+    var code = sources.map(function(pkg) {
+        if (pkg.id && cache.compress[pkg.id]) {
+            console.log("Compress Cache Hit" + pkg.id);
+            return cache.compress[pkg.id];
+        }
+        if (opts.exclude && opts.exclude.test(pkg.id))
+            return pkg.source;
+        var code = compress([pkg], opts).code;
+        return (cache.compress[pkg.id] = code);
+    }).join("\n");
+    return {code: code, map: null};
+};
+
 module.exports = compress;
+
+
+// console.log(compress([{source: "/*disable compress*/var a = 0; var  b = 1+1;"}, {source: "var a = 0; var  b = 1+1;"} ]))

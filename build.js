@@ -304,8 +304,9 @@ function rewriteDefines(sources, opts){
                 if (keepDeps == "all")
                     deps = deps.concat(pkg.deps);
             }
-            pkg.source = pkg.source.replace(/define\(\s*(?:\[[^\]]*\],\s*)?(f)/,
-                'define(\"' + pkg.id + '\",' + JSON.stringify(deps)+ ', $1');
+            pkg.source = pkg.source.replace(/define\(\s*(?:(\[[^\]]*\]),\s*)?(f)/, function(_, depArray, code) {
+                return 'define(\"' + pkg.id + '\",' + (depArray || JSON.stringify(deps)) + ', ' + code;
+            });
         }
     });
 }

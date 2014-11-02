@@ -45,24 +45,23 @@ function copy(from, to, options) {
                 return console.error(e);
             }
             
-            if (!dirCreated) {
-                if (options.onDir && options.onDir(from, to) === false)
-                    return;
-                if (options.shallow)
-                    return;
-                try {
-                    fs.mkdirSync(to);
-                } catch (e) {
-                    return; //console.error(e);
-                }
-                dirCreated = true;
-            }
-            
             if (stat.isSymbolicLink())
                 return;
             if (stat.isDirectory()) {
+                if (options.shallow)
+                    return;
                 filterCopyDir(from + '/' + x, to + '/' + x);
             } else {
+                if (!dirCreated) {
+                    if (options.onDir && options.onDir(from, to) === false)
+                        return;
+                    try {
+                        mkdirSync(to);
+                    } catch (e) {
+                        return console.error(e);
+                    }
+                    dirCreated = true;
+                }
                 try {
                     copy.file(from+ '/' + x, to+ '/' + x, options.replace);
                 } catch(e) {
@@ -109,5 +108,6 @@ copy.file = function(from, to, replace) {
         
 };
 
+copy.convertPath = convertPath;
 module.exports = copy;
 
