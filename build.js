@@ -1,8 +1,8 @@
-var fs         = require("fs");
-var path       = require("path");
-var async      = require("async");
-var mkdirp     = require("mkdirp");
+var async = require("async");
+var fs = require("fs");
+var mkdirp = require("mkdirp");
 var moduleDeps = require("./module-deps");
+var path = require("path");
 
 function build(config, opts, callback){
     if (!opts.configFile) {
@@ -157,7 +157,6 @@ function build(config, opts, callback){
     });
 }
 
-// TODO
 function createOutputFolder(opts, cb) {
     var output = (opts.outputFolder || ".") + "/" + (opts.outputFile || "");
     output = path.dirname(output);
@@ -204,44 +203,96 @@ function compileLess(opts, sources, callback) {
             next();
         });
     }, function(err) {
+        if (opts.lessLibs.css) {
+            code.push(opts.lessLibs.css);
+        }
         callback(err, {
             code: code.join("\n")
         });
     });
 }
 
+
+function compileLibRules(libs, ctx, next) {
+    // Libs is an array of paths; adds property .compiled to keep a state(cache).
+    if (libs.compiled)
+        return next(null, libs.compiled.rules, libs.compiled.css);
+
+    var src = lessPathLib(libs.staticPrefix) + libs.join("\n");
+
+    var less = require("less");
+    less.parse(src, ctx, function(err, root, imports, options) {
+        if (err) return next(err);
+        
+        toCss(root, imports, options, function(err, css) {
+            if (err) return next(err);
+                
+            libs.compiled = {
+                rules: root.rules,
+                css: css,
+            };
+    
+            next(null, libs.compiled.rules, libs.compiled.css);
+        });
+    });
+}
+
 function compileLessFragment(css, libs, root, staticPrefix, path, compress, callback) {
     var less = require("less");
-    var baseLib = "@base-path : \"" + staticPrefix + "\";\n"
-        + "@image-path : \"" + staticPrefix + "/images\";\n"
-        + "@icon-path : \"" + staticPrefix + "/icons\";\n";
-        
-    var parser = new less.Parser({
+    var ctx = {
         paths: ["/"],
         filename: root + '/unknown.less',
-    });
-    
-    if (!libs.compiled) {
-        parser.parse(libs.join("\n"), function(err, tree) {
-            libs.compiled = tree; // actually parse isn't async
-        });
-    }
-    // Parse Less Code
-    var code = baseLib + "\n" + css;
-    
-    // Complete paths, but not subdirectories like foo/images/bar.png
-    code = code.replace(/(["(])(images|icons)\//g, "$1" + staticPrefix + "/$2/");
+        compress: !!compress
+    };
 
-    console.log("[Less] compiling ", path || "skin", root);
-    parser.parse(code, function (err, tree) {
-        if (err)
-            return callback(err);
-        if (libs.compiled)
-            tree.rules = libs.compiled.rules.concat(tree.rules);
-        callback(null, tree.toCSS({ 
-            compress: compress
-        }));
+    compileLibRules( libs, ctx, function(err, libRules, libCss) {
+        if (err) return callback(err);
+        
+        var baseLib = lessPathLib(staticPrefix || libs.staticPrefix);
+        var code = baseLib + "\n" + css;
+        
+        // Complete paths, but not subdirectories like foo/images/bar.png
+        code = code.replace(/(["(])(images|icons)\//g, "$1" + staticPrefix + "/$2/");
+    
+        console.log("[Less] compiling ", path || "skin", root);
+        
+        less.parse(code, ctx, function (err, tree, imports, options) {
+            if (err) return callback(err);
+            tree.rules = libRules.concat(tree.rules);
+            
+            toCss(tree, imports, options, function(err, css) {
+                if (err) return callback(err);
+                
+                if (css.substring(0, libCss.length) == libCss) {
+                    css = css.substr(libCss.length);
+                } else {
+                    console.warn("couldn't strip default less");
+                }
+                callback(null, css);
+                
+            });
+        });
     });
+}
+
+function toCss(tree, imports, options, callback) {
+    var less = require("less");
+    var parseTree = new less.ParseTree(tree, imports);
+    var css;
+    try {
+        css = parseTree.toCSS(options).css;
+    }
+    catch (err) {
+        return callback(err);
+    }
+    callback(null, css);
+}
+
+function lessPathLib(staticPrefix) {
+    if (!staticPrefix) return "";
+    return "@base-path : \"" + staticPrefix + "\";\n"
+        + "@image-path : \"" + staticPrefix + "/images\";\n"
+        + "@icon-path : \"" + staticPrefix + "/icons\";\n";
 }
 
 function stripLess(sources) {
