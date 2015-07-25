@@ -47,7 +47,7 @@ var define = function(name, deps, callback) {
     
     define.loaded[name] = {
         id: name,
-        deps: normalizeNames(name, deps),
+        deps: normalizeNames(name, deps || []),
         factory: callback,
         exports: {},
         packaged: true
@@ -91,12 +91,15 @@ var processLoadQueue = function(err, id) {
                 if (r.errback) r.errback(err);
             }
         });
-        if (define.lastModule = err.id)
+        if (define.lastModule == err.id)
             define.lastModule = null;
         define.pending = define.pending.filter(function(p) {
             return p != err.id;
         });
         changed = true;
+    } else if (id && !defQueue.length && !define.loaded[id]) {
+        // the script didn't call define
+        defQueue = [config.shim && config.shim[id] || [[], null]];
     }
     
     if (defQueue.length) {
@@ -207,7 +210,8 @@ var _require = function(parentId, moduleName, callback, errback) {
         var depName = normalizeName(parentId, moduleName);
         var module = lookup(depName);
         if (module !== undefined) {
-            callback && callback(module);
+            if (typeof callback == "function")
+                callback(module);
             return module;
         }
     } else if (Array.isArray(moduleName)) {
@@ -270,6 +274,9 @@ var config = require.config = function(cfg) {
     cfg.paths && Object.keys(cfg.paths).forEach(function(p) {
         config.paths[p] = cfg.paths[p];
     });
+    
+    if (cfg.baseUrlLoadBalancers)
+        config.baseUrlLoadBalancers = cfg.baseUrlLoadBalancers;
 };
 config.packages = Object.create(null);
 config.paths = Object.create(null);
@@ -318,8 +325,23 @@ require.toUrl = function(moduleName, ext, skipExt) {
     if (!absRe.test(url)) {
         url = (config.baseUrl || require.MODULE_LOAD_URL + "/") +  url;
     }
+    if (url[0] === "/" && config.baseUrlLoadBalancers) {
+        var n = Math.abs(hashCode(url)) % config.baseUrlLoadBalancers.length;
+        url =  config.baseUrlLoadBalancers[n] + url;
+    }
     return url;
 };
+
+function hashCode(string) {
+    var result = 0, i, chr, len;
+    if (string.length == 0) return result;
+    for (i = 0, len = string.length; i < len; i++) {
+        chr = string.charCodeAt(i);
+        result = ((result << 5) - result) + chr;
+        result |= 0; // Convert to 32bit integer
+    }
+    return result;
+}
 
 var loadScript = function(path, id, callback) {
     // TODO use importScripts for webworkers
