@@ -16,8 +16,8 @@
     },
     "dependencies": {
         "through": "2.2.0",
-        "async": "",
-        "mkdirp": ""
+        "async": "1.5.x",
+        "mkdirp": "0.3.0"
     },
     "devDependencies": {},
     "optionalDependencies": {
